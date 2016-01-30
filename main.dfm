@@ -11,6 +11,8 @@ object MainForm: TMainForm
   Font.Name = 'Tahoma'
   Font.Style = []
   OldCreateOrder = False
+  OnCreate = FormCreate
+  OnDestroy = FormDestroy
   PixelsPerInch = 96
   TextHeight = 13
   object PageControl1: TPageControl
@@ -18,13 +20,11 @@ object MainForm: TMainForm
     Top = 0
     Width = 683
     Height = 555
-    ActivePage = TabSheet1
+    ActivePage = ResultsSheet
     Align = alClient
     TabOrder = 0
-    object TabSheet1: TTabSheet
+    object ComboSheet: TTabSheet
       Caption = 'Combos'
-      ExplicitWidth = 281
-      ExplicitHeight = 165
       DesignSize = (
         675
         527)
@@ -34,6 +34,14 @@ object MainForm: TMainForm
         Width = 29
         Height = 13
         Caption = 'out of'
+      end
+      object lblComboCount: TLabel
+        Left = 213
+        Top = 9
+        Width = 114
+        Height = 13
+        Caption = 'number of combinations'
+        Visible = False
       end
       object ComboCalculateBtn: TButton
         Left = 132
@@ -60,21 +68,36 @@ object MainForm: TMainForm
         TabOrder = 2
         Text = '45'
       end
-      object ComboResultBox: TListBox
+      object ComboBox: TListBox
         Left = 3
         Top = 32
-        Width = 669
+        Width = 123
         Height = 492
-        Anchors = [akLeft, akTop, akRight, akBottom]
+        Anchors = [akLeft, akTop, akBottom]
         ItemHeight = 13
         TabOrder = 3
+        OnClick = ComboBoxClick
+        OnKeyPress = ComboBoxKeyPress
+      end
+      object ComboMemo: TMemo
+        Left = 132
+        Top = 32
+        Width = 540
+        Height = 492
+        Anchors = [akLeft, akTop, akRight, akBottom]
+        TabOrder = 4
       end
     end
-    object TabSheet2: TTabSheet
-      Caption = 'TabSheet2'
+    object ResultsSheet: TTabSheet
+      Caption = 'Past results'
       ImageIndex = 1
-      ExplicitWidth = 281
-      ExplicitHeight = 165
+      object PastResultsMemo: TMemo
+        Left = 3
+        Top = 3
+        Width = 669
+        Height = 521
+        TabOrder = 0
+      end
     end
   end
 end

@@ -4,21 +4,40 @@ interface
 
 uses
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
-  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.ComCtrls;
+  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.ComCtrls, Worker;
+
+const
+     PM_ComboThreadFinished = WM_USER+1;
 
 type
   TMainForm = class(TForm)
     PageControl1: TPageControl;
-    TabSheet1: TTabSheet;
-    TabSheet2: TTabSheet;
+    ComboSheet: TTabSheet;
+    ResultsSheet: TTabSheet;
     ComboCalculateBtn: TButton;
     ComboSizeEdit: TEdit;
     ComboMaxEdit: TEdit;
     Label1: TLabel;
-    ComboResultBox: TListBox;
+    ComboBox: TListBox;
+    lblComboCount: TLabel;
+    ComboMemo: TMemo;
+    PastResultsMemo: TMemo;
     procedure ComboCalculateBtnClick(Sender: TObject);
+    procedure FormCreate(Sender: TObject);
+    procedure FormDestroy(Sender: TObject);
+    procedure ComboBoxClick(Sender: TObject);
+    procedure ComboBoxKeyPress(Sender: TObject; var Key: Char);
   private
+    AppPath     : string;
+    ComboThread : TCalculationThread;
     procedure ChangeEnabled;
+    procedure PMComboThreadFinished(var M: TMessage); message PM_ComboThreadFinished;
+    function GetFilenameForCombination(Num, Max: integer): string;
+    procedure FindCombinationFiles(List: TStrings);
+    procedure LoadSelectedCombo;
+    function AddNewCombinationFile(const Filename: string): integer;
+    procedure LoadPastResults;
+    procedure SavePastResults;
   public
     { Public declarations }
   end;
@@ -33,20 +52,53 @@ uses
 
 {$R *.dfm}
 
+const
+     CombinationsPathConst = 'combinations\';
+     PastResultsPathConst  = 'results\';
+
+     PastResultsFilenameConst = 'results.txt';
+
+     ComboFileExt = '.combo';
+
+
+
 { TMainForm }
+
+function TMainForm.AddNewCombinationFile(const Filename: string): integer;
+var
+   s   : string;
+   idx : integer;
+begin
+  Result := -1;
+  if not FileExists(Filename) then
+    Exit;
+
+  s := ChangeFileExt(ExtractFileName(Filename), '');
+  idx := ComboBox.Items.IndexOf(s);
+  if idx < 0 then
+    idx := ComboBox.Items.Add(s);
+
+  Result := idx;
+end;
 
 procedure TMainForm.ChangeEnabled;
 begin
-  {}
+  lblComboCount.Visible := Assigned(ComboThread) or (ComboMemo.Lines.Count > 0);
+end;
+
+procedure TMainForm.ComboBoxClick(Sender: TObject);
+begin
+  LoadSelectedCombo;
+end;
+
+procedure TMainForm.ComboBoxKeyPress(Sender: TObject; var Key: Char);
+begin
+  LoadSelectedCombo;
 end;
 
 procedure TMainForm.ComboCalculateBtnClick(Sender: TObject);
 var
    num, max : integer;
-   list     : TCombinationList;
-   i, j     : integer;
-   s        : string;
-   combo    : PCombination;
 begin
   num := StrToIntDef(ComboSizeEdit.Text, 0);
   max := StrToIntDef(ComboMaxEdit.Text, 0);
@@ -56,26 +108,162 @@ begin
     Exit;
   end;
 
+  lblComboCount.Caption := 'Calculating...';
+
+  ComboThread := TCalculationThread.Create;
+  //ComboThread.Priority := tpHigher;
+  ComboThread.Num := num;
+  ComboThread.Max := max;
+  ComboThread.NotificationWindow := Handle;
+  ComboThread.NotificationMsg := PM_ComboThreadFinished;
+
+  ComboThread.Start;
+
   ChangeEnabled;
+end;
 
-  list := TCombinationList.Create;
-  try
-    CalculateCombinations(num, 1, max, list);
+procedure TMainForm.FindCombinationFiles(List: TStrings);
+var
+   SR : TSearchRec;
+   r  : integer;
+   sl : TStringList;
+   s  : string;
+begin
+  r := FindFirst(AppPath + CombinationsPathConst + '*' + ComboFileExt, faAnyFile, SR);
+  while r = 0 do
+  begin
+    if (SR.Name = '.') or (SR.Name = '..') or (SR.Attr and faDirectory = faDirectory) then
+      Continue;
 
-    ComboResultBox.Items.BeginUpdate;
-    ComboResultBox.Items.Clear;
-    for i := 0 to list.Count-1 do
-    begin
-      combo := list.Items[i];
-      s := '';
-      for j := 0 to num-1 do
-        s := s + ' ' + IntToStr(combo^[j]);
-      ComboResultBox.Items.Add(s);
-    end;
-    ComboResultBox.Items.EndUpdate;
-  finally
-    list.Free;
+    s := AppPath + CombinationsPathConst + SR.Name;
+    List.Add(s);
+
+    r := FindNext(SR);
   end;
+  FindClose(SR);
+end;
+
+procedure TMainForm.FormCreate(Sender: TObject);
+var
+   sl : TStringList;
+   i  : integer;
+begin
+  ComboThread := nil;
+  AppPath := ExtractFilePath(Application.ExeName);
+
+  sl := TStringList.Create;
+  try
+    FindCombinationFiles(sl);
+
+    ComboBox.Items.BeginUpdate;
+    for i := 0 to sl.Count-1 do
+      AddNewCombinationFile(sl[i]);
+    ComboBox.Items.EndUpdate;
+
+    ComboBox.ItemIndex := 0;
+    LoadSelectedCombo;
+  finally
+    sl.Free;
+  end;
+
+  LoadPastResults;
+
+  ChangeEnabled;
+end;
+
+procedure TMainForm.FormDestroy(Sender: TObject);
+begin
+  SavePastResults;
+
+  if Assigned(ComboThread) then
+  begin
+    ComboThread.Cancelled := TRUE;
+    ComboThread.WaitFor;
+    FreeAndNil(ComboThread);
+  end;
+end;
+
+function TMainForm.GetFilenameForCombination(Num, Max: integer): string;
+begin
+  Result := AppPath + CombinationsPathConst + Format('%d from %d%s', [Num, Max, ComboFileExt]);
+end;
+
+procedure TMainForm.LoadPastResults;
+var
+   fname: string;
+begin
+  fname := AppPath + PastResultsPathConst + PastResultsFilenameConst;
+
+  PastResultsMemo.Lines.Clear;
+  if FileExists(fname) then
+    PastResultsMemo.Lines.LoadFromFile(fname);
+end;
+
+procedure TMainForm.LoadSelectedCombo;
+var
+   fname: string;
+begin
+  if (ComboBox.ItemIndex < 0) or (ComboBox.ItemIndex >= ComboBox.Items.Count) then
+    Exit;
+
+  fname := AppPath + CombinationsPathConst + ComboBox.Items[ComboBox.ItemIndex] + ComboFileExt;
+  if not FileExists(fname) then
+  begin
+    MessageDlg('The selected combination file doesn''t exist.', mtError, [mbOK], 0);
+    Exit;
+  end;
+
+  lblComboCount.Caption := 'Loading combinations...';
+  lblComboCount.Visible := TRUE;
+  Application.ProcessMessages;
+
+  ComboMemo.Lines.LoadFromFile(fname);
+
+  lblComboCount.Caption := Format('%d combination(s)', [ComboMemo.Lines.Count]);
+  ChangeEnabled;
+end;
+
+procedure TMainForm.PMComboThreadFinished(var M: TMessage);
+var
+   i, j  : integer;
+   s     : string;
+   combo : PCombination;
+   sl    : TStringList;
+   fname : string;
+   idx   : integer;
+begin
+  fname := GetFilenameForCombination(ComboThread.Num, ComboThread.Max);
+
+  sl := TStringList.Create;
+  try
+    for i := 0 to ComboThread.List.Count-1 do
+    begin
+      combo := ComboThread.List.Items[i];
+      s := '';
+      for j := 0 to ComboThread.Num-1 do
+        s := s + ' ' + IntToStr(combo^[j]);
+      sl.Add(s);
+    end;
+    sl.SaveToFile(fname);
+  finally
+    sl.Free;
+  end;
+
+  idx := AddNewCombinationFile(fname);
+  if idx >= 0 then
+  begin
+    ComboBox.ItemIndex := idx;
+    LoadSelectedCombo;
+  end;
+
+  FreeAndNil(ComboThread);
+
+  ChangeEnabled;
+end;
+
+procedure TMainForm.SavePastResults;
+begin
+  PastResultsMemo.Lines.SaveToFile(AppPath + PastResultsPathConst + PastResultsFilenameConst);
 end;
 
 initialization

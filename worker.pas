@@ -12,6 +12,7 @@ type
       List               : TCombinationList;
       NotificationWindow : THandle;
       NotificationMsg    : cardinal;
+      Cancelled          : boolean;
 
       constructor Create;
       destructor Destroy; override;
@@ -26,7 +27,12 @@ implementation
 
 constructor TCalculationThread.Create;
 begin
+  inherited Create(TRUE);
+
   List := TCombinationList.Create;
+  Cancelled := FALSE;
+  NotificationWindow := 0;
+  NotificationMsg := 0;
 end;
 
 destructor TCalculationThread.Destroy;
@@ -38,8 +44,17 @@ end;
 procedure TCalculationThread.Execute;
 begin
   List.Clear;
+  Cancelled := FALSE;
 
-  if NotificationWindow <> 0 then
+  CalculateCombinations(Num, 1, Max, List);
+  (*
+  while not Cancelled do
+  begin
+    Sleep(0);
+  end;
+  *)
+
+  if not Cancelled and (NotificationWindow <> 0) then
     PostMessage(NotificationWindow, NotificationMsg, 0, 0);
 end;
 
