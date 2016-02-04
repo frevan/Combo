@@ -3,15 +3,16 @@ unit main;
 interface
 
 uses
-  Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
-  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.ComCtrls, Worker;
+  Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants,
+  System.Classes, Vcl.Graphics, Vcl.Controls, Vcl.Forms, Vcl.Dialogs,
+  Vcl.StdCtrls, Vcl.ComCtrls, Worker, fvm.Combinations;
 
 const
      PM_ComboThreadFinished = WM_USER+1;
 
 type
   TMainForm = class(TForm)
-    PageControl1: TPageControl;
+    PageControl: TPageControl;
     ComboSheet: TTabSheet;
     ResultsSheet: TTabSheet;
     ComboCalculateBtn: TButton;
@@ -21,7 +22,9 @@ type
     ComboBox: TListBox;
     lblComboCount: TLabel;
     ComboMemo: TMemo;
-    PastResultsMemo: TMemo;
+    PastResultsView: TListView;
+    lblPastResultsCount: TLabel;
+    CalculationsSheet: TTabSheet;
     procedure ComboCalculateBtnClick(Sender: TObject);
     procedure FormCreate(Sender: TObject);
     procedure FormDestroy(Sender: TObject);
@@ -37,7 +40,7 @@ type
     procedure LoadSelectedCombo;
     function AddNewCombinationFile(const Filename: string): integer;
     procedure LoadPastResults;
-    procedure SavePastResults;
+    function ParseCSVLine(const Line: string; out Date: TDate; out Combo: PCombination; out Length: integer): boolean;
   public
     { Public declarations }
   end;
@@ -47,18 +50,34 @@ var
 
 implementation
 
-uses
-    fvm.Combinations;
-
 {$R *.dfm}
 
 const
      CombinationsPathConst = 'combinations\';
      PastResultsPathConst  = 'results\';
 
-     PastResultsFilenameConst = 'results.txt';
+     PastResultsFilenameConst = 'results.csv';
 
      ComboFileExt = '.combo';
+
+
+
+function NextValueFrom(var s: string; Separator: char = ','): string;
+var
+   p: integer;
+begin
+  p := Pos(Separator, s);
+  if p = 0 then
+  begin
+    Result := Trim(s);
+    s := '';
+  end
+  else
+  begin
+    Result := Trim(Copy(s, 1, p-1));
+    s := Trim(Copy(s, p+1, MaxInt));
+  end;
+end;
 
 
 
@@ -173,8 +192,6 @@ end;
 
 procedure TMainForm.FormDestroy(Sender: TObject);
 begin
-  SavePastResults;
-
   if Assigned(ComboThread) then
   begin
     ComboThread.Cancelled := TRUE;
@@ -190,13 +207,41 @@ end;
 
 procedure TMainForm.LoadPastResults;
 var
-   fname: string;
+   fname   : string;
+   sl      : TStringList;
+   csvline : string;
+   d       : TDate;
+   combo   : PCombination;
+   item    : TListItem;
+   i       : integer;
+   combocount: integer;
 begin
-  fname := AppPath + PastResultsPathConst + PastResultsFilenameConst;
+  PastResultsView.Items.Clear;
 
-  PastResultsMemo.Lines.Clear;
-  if FileExists(fname) then
-    PastResultsMemo.Lines.LoadFromFile(fname);
+  fname := AppPath + PastResultsPathConst + PastResultsFilenameConst;
+  if not FileExists(fname) then
+    Exit;
+
+  sl := TStringList.Create;
+  try
+    sl.LoadFromFile(fname);
+    for csvline in sl do
+    begin
+      if not ParseCSVLine(csvline, d, combo, combocount) then
+        Continue;
+
+      item := PastResultsView.Items.Add;
+      item.Caption := DateToStr(d);
+      for i := 0 to combocount-1 do
+        item.SubItems.Add(IntToStr(combo^[i]));
+
+      FreeMem(combo);
+    end;
+  finally
+    sl.Free;
+  end;
+
+  lblPastResultsCount.Caption := Format('Found %d past results.', [PastResultsView.Items.Count]);
 end;
 
 procedure TMainForm.LoadSelectedCombo;
@@ -221,6 +266,42 @@ begin
 
   lblComboCount.Caption := Format('%d combination(s)', [ComboMemo.Lines.Count]);
   ChangeEnabled;
+end;
+
+function TMainForm.ParseCSVLine(const Line: string; out Date: TDate; out Combo: PCombination; out Length: integer): boolean;
+var
+   s, vstring : string;
+   value      : cardinal;
+begin
+  Date := 0;
+  Combo := nil;
+  Length := 0;
+
+  s := Trim(Line);
+  vstring := NextValueFrom(s, ',');
+  if vstring = '' then
+    Exit(FALSE);
+
+  try
+    Date := StrToDate(vstring);
+  except
+    on EConvertError do
+      Exit(FALSE);
+  end;
+
+  while s <> '' do
+  begin
+    vstring := NextValueFrom(s, ',');
+    value := StrToIntDef(vstring, -1);
+    if value = -1 then
+      Break;
+
+    inc(Length);
+    ReAllocMem(Combo, Length*SizeOf(cardinal));
+    Combo^[Length-1] := value;
+  end;
+
+  Result := (Length > 0);
 end;
 
 procedure TMainForm.PMComboThreadFinished(var M: TMessage);
@@ -259,11 +340,6 @@ begin
   FreeAndNil(ComboThread);
 
   ChangeEnabled;
-end;
-
-procedure TMainForm.SavePastResults;
-begin
-  PastResultsMemo.Lines.SaveToFile(AppPath + PastResultsPathConst + PastResultsFilenameConst);
 end;
 
 initialization

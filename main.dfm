@@ -15,12 +15,12 @@ object MainForm: TMainForm
   OnDestroy = FormDestroy
   PixelsPerInch = 96
   TextHeight = 13
-  object PageControl1: TPageControl
+  object PageControl: TPageControl
     Left = 0
     Top = 0
     Width = 683
     Height = 555
-    ActivePage = ResultsSheet
+    ActivePage = CalculationsSheet
     Align = alClient
     TabOrder = 0
     object ComboSheet: TTabSheet
@@ -91,13 +91,59 @@ object MainForm: TMainForm
     object ResultsSheet: TTabSheet
       Caption = 'Past results'
       ImageIndex = 1
-      object PastResultsMemo: TMemo
+      ExplicitLeft = 8
+      ExplicitTop = 28
+      DesignSize = (
+        675
+        527)
+      object lblPastResultsCount: TLabel
         Left = 3
         Top = 3
-        Width = 669
-        Height = 521
-        TabOrder = 0
+        Width = 95
+        Height = 13
+        Caption = 'lblPastResultsCount'
       end
+      object PastResultsView: TListView
+        Left = 3
+        Top = 22
+        Width = 669
+        Height = 502
+        Anchors = [akLeft, akTop, akRight, akBottom]
+        Columns = <
+          item
+            Caption = 'Date'
+            Width = 120
+          end
+          item
+            Caption = '#1'
+          end
+          item
+            Caption = '#2'
+          end
+          item
+            Caption = '#3'
+          end
+          item
+            Caption = '#4'
+          end
+          item
+            Caption = '#5'
+          end
+          item
+            Caption = '#6'
+          end
+          item
+            Caption = 'Bonus'
+          end>
+        ReadOnly = True
+        RowSelect = True
+        TabOrder = 0
+        ViewStyle = vsReport
+      end
+    end
+    object CalculationsSheet: TTabSheet
+      Caption = 'Calculations'
+      ImageIndex = 2
     end
   end
 end
