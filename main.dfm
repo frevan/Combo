@@ -3,8 +3,10 @@ object MainForm: TMainForm
   Top = 0
   Caption = 'Lotto Combo'
   ClientHeight = 555
-  ClientWidth = 683
+  ClientWidth = 684
   Color = clBtnFace
+  Constraints.MinHeight = 400
+  Constraints.MinWidth = 700
   Font.Charset = DEFAULT_CHARSET
   Font.Color = clWindowText
   Font.Height = -11
@@ -18,15 +20,20 @@ object MainForm: TMainForm
   object PageControl: TPageControl
     Left = 0
     Top = 0
-    Width = 683
+    Width = 684
     Height = 555
-    ActivePage = CalculationsSheet
+    ActivePage = ResultsSheet
     Align = alClient
+    DoubleBuffered = True
+    ParentDoubleBuffered = False
     TabOrder = 0
+    ExplicitLeft = 8
+    ExplicitWidth = 683
     object ComboSheet: TTabSheet
       Caption = 'Combos'
+      ExplicitWidth = 675
       DesignSize = (
-        675
+        676
         527)
       object Label1: TLabel
         Left = 47
@@ -82,19 +89,19 @@ object MainForm: TMainForm
       object ComboMemo: TMemo
         Left = 132
         Top = 32
-        Width = 540
+        Width = 541
         Height = 492
         Anchors = [akLeft, akTop, akRight, akBottom]
         TabOrder = 4
+        ExplicitWidth = 540
       end
     end
     object ResultsSheet: TTabSheet
       Caption = 'Past results'
       ImageIndex = 1
-      ExplicitLeft = 8
-      ExplicitTop = 28
+      ExplicitWidth = 675
       DesignSize = (
-        675
+        676
         527)
       object lblPastResultsCount: TLabel
         Left = 3
@@ -106,7 +113,7 @@ object MainForm: TMainForm
       object PastResultsView: TListView
         Left = 3
         Top = 22
-        Width = 669
+        Width = 670
         Height = 502
         Anchors = [akLeft, akTop, akRight, akBottom]
         Columns = <
@@ -144,6 +151,14 @@ object MainForm: TMainForm
     object CalculationsSheet: TTabSheet
       Caption = 'Calculations'
       ImageIndex = 2
+      ExplicitWidth = 675
+      object Label2: TLabel
+        Left = 3
+        Top = 3
+        Width = 297
+        Height = 13
+        Caption = 'Create combinations of 6 so all combinations of 3 are present.'
+      end
     end
   end
 end

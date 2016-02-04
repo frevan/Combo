@@ -25,6 +25,7 @@ type
     PastResultsView: TListView;
     lblPastResultsCount: TLabel;
     CalculationsSheet: TTabSheet;
+    Label2: TLabel;
     procedure ComboCalculateBtnClick(Sender: TObject);
     procedure FormCreate(Sender: TObject);
     procedure FormDestroy(Sender: TObject);
