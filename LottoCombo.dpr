@@ -4,7 +4,8 @@ uses
   Vcl.Forms,
   main in 'main.pas' {MainForm},
   worker in 'worker.pas',
-  fvm.combinations in 'fvm.combinations.pas';
+  fvm.combinations in 'fvm.combinations.pas',
+  calculator in 'calculator.pas';
 
 {$R *.res}
 

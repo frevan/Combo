@@ -41,7 +41,7 @@ type
     procedure LoadSelectedCombo;
     function AddNewCombinationFile(const Filename: string): integer;
     procedure LoadPastResults;
-    function ParseCSVLine(const Line: string; out Date: TDate; out Combo: PCombination; out Length: integer): boolean;
+    function ParseCSVLine(const Line: string; out Date: TDate; out Combo: PCombination): boolean;
   public
     { Public declarations }
   end;
@@ -50,6 +50,9 @@ var
   MainForm: TMainForm;
 
 implementation
+
+uses
+    calculator;
 
 {$R *.dfm}
 
@@ -215,7 +218,6 @@ var
    combo   : PCombination;
    item    : TListItem;
    i       : integer;
-   combocount: integer;
 begin
   PastResultsView.Items.Clear;
 
@@ -228,13 +230,13 @@ begin
     sl.LoadFromFile(fname);
     for csvline in sl do
     begin
-      if not ParseCSVLine(csvline, d, combo, combocount) then
+      if not ParseCSVLine(csvline, d, combo) then
         Continue;
 
       item := PastResultsView.Items.Add;
       item.Caption := DateToStr(d);
-      for i := 0 to combocount-1 do
-        item.SubItems.Add(IntToStr(combo^[i]));
+      for i := 0 to combo^.Places-1 do
+        item.SubItems.Add(IntToStr(combo^.Data[i]));
 
       FreeMem(combo);
     end;
@@ -269,14 +271,15 @@ begin
   ChangeEnabled;
 end;
 
-function TMainForm.ParseCSVLine(const Line: string; out Date: TDate; out Combo: PCombination; out Length: integer): boolean;
+function TMainForm.ParseCSVLine(const Line: string; out Date: TDate; out Combo: PCombination): boolean;
 var
    s, vstring : string;
    value      : cardinal;
+   values     : array of cardinal;
+   i          : integer;
 begin
   Date := 0;
   Combo := nil;
-  Length := 0;
 
   s := Trim(Line);
   vstring := NextValueFrom(s, ',');
@@ -290,6 +293,7 @@ begin
       Exit(FALSE);
   end;
 
+  SetLength(values, 0);
   while s <> '' do
   begin
     vstring := NextValueFrom(s, ',');
@@ -297,12 +301,18 @@ begin
     if value = -1 then
       Break;
 
-    inc(Length);
-    ReAllocMem(Combo, Length*SizeOf(cardinal));
-    Combo^[Length-1] := value;
+    SetLength(values, Length(values)+1);
+    values[High(values)] := value;
   end;
 
-  Result := (Length > 0);
+  if Length(values) > 0 then
+  begin
+    Combo := TCombinationList.CreateNewItem(Length(values), 45);  // hardcoded maxvalue for now
+    for i := 0 to Combo.Places-1 do
+      Combo^.Data[i] := value;
+  end;
+
+  Result := Assigned(Combo);
 end;
 
 procedure TMainForm.PMComboThreadFinished(var M: TMessage);
@@ -323,7 +333,7 @@ begin
       combo := ComboThread.List.Items[i];
       s := '';
       for j := 0 to ComboThread.Num-1 do
-        s := s + ' ' + IntToStr(combo^[j]);
+        s := s + ' ' + IntToStr(combo^.Data[j]);
       sl.Add(s);
     end;
     sl.SaveToFile(fname);

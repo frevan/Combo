@@ -22,16 +22,17 @@ object MainForm: TMainForm
     Top = 0
     Width = 684
     Height = 555
-    ActivePage = ResultsSheet
+    ActivePage = ComboSheet
     Align = alClient
     DoubleBuffered = True
     ParentDoubleBuffered = False
     TabOrder = 0
-    ExplicitLeft = 8
-    ExplicitWidth = 683
     object ComboSheet: TTabSheet
       Caption = 'Combos'
-      ExplicitWidth = 675
+      ExplicitLeft = 0
+      ExplicitTop = 0
+      ExplicitWidth = 0
+      ExplicitHeight = 0
       DesignSize = (
         676
         527)
@@ -92,14 +93,17 @@ object MainForm: TMainForm
         Width = 541
         Height = 492
         Anchors = [akLeft, akTop, akRight, akBottom]
+        ScrollBars = ssVertical
         TabOrder = 4
-        ExplicitWidth = 540
       end
     end
     object ResultsSheet: TTabSheet
       Caption = 'Past results'
       ImageIndex = 1
-      ExplicitWidth = 675
+      ExplicitLeft = 0
+      ExplicitTop = 0
+      ExplicitWidth = 0
+      ExplicitHeight = 0
       DesignSize = (
         676
         527)
@@ -151,7 +155,10 @@ object MainForm: TMainForm
     object CalculationsSheet: TTabSheet
       Caption = 'Calculations'
       ImageIndex = 2
-      ExplicitWidth = 675
+      ExplicitLeft = 0
+      ExplicitTop = 0
+      ExplicitWidth = 0
+      ExplicitHeight = 0
       object Label2: TLabel
         Left = 3
         Top = 3

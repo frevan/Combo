@@ -46,13 +46,7 @@ begin
   List.Clear;
   Cancelled := FALSE;
 
-  CalculateCombinations(Num, 1, Max, List);
-  (*
-  while not Cancelled do
-  begin
-    Sleep(0);
-  end;
-  *)
+  CalculateCombinations(Num, Max, List);
 
   if not Cancelled and (NotificationWindow <> 0) then
     PostMessage(NotificationWindow, NotificationMsg, 0, 0);
