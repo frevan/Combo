@@ -22,17 +22,13 @@ object MainForm: TMainForm
     Top = 0
     Width = 684
     Height = 555
-    ActivePage = ComboSheet
+    ActivePage = CalculationsSheet
     Align = alClient
     DoubleBuffered = True
     ParentDoubleBuffered = False
     TabOrder = 0
     object ComboSheet: TTabSheet
       Caption = 'Combos'
-      ExplicitLeft = 0
-      ExplicitTop = 0
-      ExplicitWidth = 0
-      ExplicitHeight = 0
       DesignSize = (
         676
         527)
@@ -100,10 +96,6 @@ object MainForm: TMainForm
     object ResultsSheet: TTabSheet
       Caption = 'Past results'
       ImageIndex = 1
-      ExplicitLeft = 0
-      ExplicitTop = 0
-      ExplicitWidth = 0
-      ExplicitHeight = 0
       DesignSize = (
         676
         527)
@@ -155,16 +147,67 @@ object MainForm: TMainForm
     object CalculationsSheet: TTabSheet
       Caption = 'Calculations'
       ImageIndex = 2
-      ExplicitLeft = 0
-      ExplicitTop = 0
-      ExplicitWidth = 0
-      ExplicitHeight = 0
+      DesignSize = (
+        676
+        527)
       object Label2: TLabel
         Left = 3
-        Top = 3
-        Width = 297
+        Top = 8
+        Width = 114
         Height = 13
-        Caption = 'Create combinations of 6 so all combinations of 3 are present.'
+        Caption = 'Create combinations of '
+      end
+      object Label3: TLabel
+        Left = 274
+        Top = 8
+        Width = 40
+        Height = 13
+        Caption = 'so all of '
+      end
+      object Label4: TLabel
+        Left = 471
+        Top = 8
+        Width = 62
+        Height = 13
+        Caption = 'are included.'
+      end
+      object CalcSourceCombo: TComboBox
+        Left = 123
+        Top = 5
+        Width = 145
+        Height = 21
+        Style = csDropDownList
+        Ctl3D = True
+        ParentCtl3D = False
+        TabOrder = 0
+      end
+      object CalcInclusionCombo: TComboBox
+        Left = 320
+        Top = 5
+        Width = 145
+        Height = 21
+        Style = csDropDownList
+        Ctl3D = True
+        ParentCtl3D = False
+        TabOrder = 1
+      end
+      object CalculateBtn: TButton
+        Left = 552
+        Top = 3
+        Width = 75
+        Height = 25
+        Caption = 'Calculate'
+        TabOrder = 2
+        OnClick = CalculateBtnClick
+      end
+      object CalculationResultBox: TListBox
+        Left = 3
+        Top = 32
+        Width = 222
+        Height = 492
+        Anchors = [akLeft, akTop, akBottom]
+        ItemHeight = 13
+        TabOrder = 3
       end
     end
   end

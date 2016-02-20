@@ -26,11 +26,18 @@ type
     lblPastResultsCount: TLabel;
     CalculationsSheet: TTabSheet;
     Label2: TLabel;
+    CalcSourceCombo: TComboBox;
+    CalcInclusionCombo: TComboBox;
+    Label3: TLabel;
+    Label4: TLabel;
+    CalculateBtn: TButton;
+    CalculationResultBox: TListBox;
     procedure ComboCalculateBtnClick(Sender: TObject);
     procedure FormCreate(Sender: TObject);
     procedure FormDestroy(Sender: TObject);
     procedure ComboBoxClick(Sender: TObject);
     procedure ComboBoxKeyPress(Sender: TObject; var Key: Char);
+    procedure CalculateBtnClick(Sender: TObject);
   private
     AppPath     : string;
     ComboThread : TCalculationThread;
@@ -42,8 +49,9 @@ type
     function AddNewCombinationFile(const Filename: string): integer;
     procedure LoadPastResults;
     function ParseCSVLine(const Line: string; out Date: TDate; out Combo: PCombination): boolean;
+    procedure UpdateCalculationCombos;
+    function BuildFileNameForCombination(const ComboName: string): string;
   public
-    { Public declarations }
   end;
 
 var
@@ -52,7 +60,7 @@ var
 implementation
 
 uses
-    calculator;
+    calculator, fvm.Strings;
 
 {$R *.dfm}
 
@@ -63,27 +71,6 @@ const
      PastResultsFilenameConst = 'results.csv';
 
      ComboFileExt = '.combo';
-
-
-
-function NextValueFrom(var s: string; Separator: char = ','): string;
-var
-   p: integer;
-begin
-  p := Pos(Separator, s);
-  if p = 0 then
-  begin
-    Result := Trim(s);
-    s := '';
-  end
-  else
-  begin
-    Result := Trim(Copy(s, 1, p-1));
-    s := Trim(Copy(s, p+1, MaxInt));
-  end;
-end;
-
-
 
 { TMainForm }
 
@@ -102,6 +89,50 @@ begin
     idx := ComboBox.Items.Add(s);
 
   Result := idx;
+end;
+
+function TMainForm.BuildFileNameForCombination(const ComboName: string): string;
+var
+   fname: string;
+begin
+  Result := '';
+
+  fname := AppPath + CombinationsPathConst + ComboName + ComboFileExt;
+  if FileExists(fname) then
+    Result := fname;
+end;
+
+procedure TMainForm.CalculateBtnClick(Sender: TObject);
+var
+   resultlist, sourcelist, includelist : TCombinationList;
+   sourcefname, includefname           : string;
+   sl                                  : TStrings;
+begin
+  sourcefname := BuildFileNameForCombination(CalcSourceCombo.Text);
+  includefname := BuildFileNameForCombination(CalcInclusionCombo.Text);
+  if not FileExists(sourcefname) or not FileExists(includefname) then
+  begin
+    MessageDlg('Please choose both combinations.', mtError, [mbOK], 0);
+    Exit;
+  end;
+
+  resultlist := TCombinationList.Create;
+  sourcelist := TCombinationList.Create;
+  includelist := TCombinationList.Create;
+  try
+    sourcelist.LoadFromFile(sourcefname);
+    includelist.LoadFromFile(includefname);
+
+    FindCombinationsIncludingAllOfLesser(resultlist, sourcelist, includelist);
+
+    sl := resultlist.ToStrings;
+    CalculationResultBox.Items.Assign(sl);
+  finally
+    sl.Free;
+    resultlist.Free;
+    sourcelist.Free;
+    includelist.Free;
+  end;
 end;
 
 procedure TMainForm.ChangeEnabled;
@@ -191,6 +222,7 @@ begin
 
   LoadPastResults;
 
+  UpdateCalculationCombos;
   ChangeEnabled;
 end;
 
@@ -249,12 +281,15 @@ end;
 
 procedure TMainForm.LoadSelectedCombo;
 var
-   fname: string;
+   fname : string;
+   list  : TCombinationList;
+   combo : PCombination;
+   sl    : TStrings;
 begin
   if (ComboBox.ItemIndex < 0) or (ComboBox.ItemIndex >= ComboBox.Items.Count) then
     Exit;
 
-  fname := AppPath + CombinationsPathConst + ComboBox.Items[ComboBox.ItemIndex] + ComboFileExt;
+  fname := BuildFileNameForCombination(ComboBox.Items[ComboBox.ItemIndex]);
   if not FileExists(fname) then
   begin
     MessageDlg('The selected combination file doesn''t exist.', mtError, [mbOK], 0);
@@ -265,7 +300,15 @@ begin
   lblComboCount.Visible := TRUE;
   Application.ProcessMessages;
 
-  ComboMemo.Lines.LoadFromFile(fname);
+  list := TCombinationList.Create;
+  try
+    list.LoadFromFile(fname);
+    sl := list.ToStrings;
+    ComboMemo.Lines.Assign(sl);
+  finally
+    sl.Free;
+    list.Free;
+  end;
 
   lblComboCount.Caption := Format('%d combination(s)', [ComboMemo.Lines.Count]);
   ChangeEnabled;
@@ -282,7 +325,7 @@ begin
   Combo := nil;
 
   s := Trim(Line);
-  vstring := NextValueFrom(s, ',');
+  vstring := RetrieveNextValueFrom(s, ',');
   if vstring = '' then
     Exit(FALSE);
 
@@ -296,9 +339,8 @@ begin
   SetLength(values, 0);
   while s <> '' do
   begin
-    vstring := NextValueFrom(s, ',');
-    value := StrToIntDef(vstring, -1);
-    if value = -1 then
+    value := StrToIntDef(RetrieveNextValueFrom(s, ','), 0);
+    if value = 0 then
       Break;
 
     SetLength(values, Length(values)+1);
@@ -307,7 +349,7 @@ begin
 
   if Length(values) > 0 then
   begin
-    Combo := TCombinationList.CreateNewItem(Length(values), 45);  // hardcoded maxvalue for now
+    Combo := TCombinationList.CreateNewItem(Length(values));
     for i := 0 to Combo.Places-1 do
       Combo^.Data[i] := value;
   end;
@@ -350,7 +392,14 @@ begin
 
   FreeAndNil(ComboThread);
 
+  UpdateCalculationCombos;
   ChangeEnabled;
+end;
+
+procedure TMainForm.UpdateCalculationCombos;
+begin
+  CalcSourceCombo.Items.Assign(ComboBox.Items);
+  CalcInclusionCombo.Items.Assign(ComboBox.Items);
 end;
 
 initialization

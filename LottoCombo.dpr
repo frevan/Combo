@@ -5,7 +5,8 @@ uses
   main in 'main.pas' {MainForm},
   worker in 'worker.pas',
   fvm.combinations in 'fvm.combinations.pas',
-  calculator in 'calculator.pas';
+  calculator in 'calculator.pas',
+  fvm.strings in 'fvm.strings.pas';
 
 {$R *.res}
 
