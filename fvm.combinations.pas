@@ -5,32 +5,47 @@ interface
 uses
     Generics.Collections, Classes, SyncObjs;
 
-type
-    PCombination = ^TCombination;
-    TCombination = record
-      Next, Prev : PCombination;
-      Places     : cardinal;
-      Data       : array[0..0] of cardinal;
-      function ContainsOtherCombination(Other: PCombination): boolean;
-      function ToString: string;
-    end;
 
+
+function CalculateNumberOfCombinations(NumPlaces, MaxValue: cardinal): cardinal;
+
+
+
+const MaxPlacesConst      = 6;
+
+type  TCombination = uint64;
+      TCombinationRec = packed record
+        case integer of
+          0 :  (MaxValue, NumPlaces: byte; Data: array[0..MaxPlacesConst-1] of byte);
+          1 :  (Blob: TCombination);
+      end;
+
+function CombinationToString(Source: TCombination): string;
+function StringToCombination(const Line: string): TCombination; inline;
+
+
+
+type
+    PCombinationListData = ^TCombinationListData;
+    TCombinationListData = array[0..0] of TCombination;
 
     TCombinationList = class
     private
-      FFirst  : PCombination;
-      FLast   : PCombination;
-      FCount  : integer;
-      Lock    : TCriticalSection;
-      function GetItems(Index: integer): PCombination;
-      function CreateItemFromString(const Line: string): PCombination;
+      FItems    : PCombinationListData;
+      FCount    : integer;
+      FCapacity : integer;
+      Lock      : TCriticalSection;
+      function GetItems(Index: integer): TCombination;
+      procedure SetItems(Index: integer; NewValue: TCombination);
+      procedure SetCapacity(NewValue: integer);
+      function ToRawStrings: TStrings;
     public
       constructor Create;
       destructor Destroy; override;
 
-      class function CreateNewItem(Places: cardinal; CopyFrom: PCombination = nil): PCombination;
-      procedure Add(Item: PCombination);
-      procedure Delete(Item: PCombination; FreeAsWell: boolean);
+      procedure Add(Item: TCombination); overload;
+      procedure Delete(Index: integer);
+      procedure Remove(Item: TCombination);
       procedure Clear;
 
       procedure SaveToFile(const FileName: string);
@@ -38,18 +53,14 @@ type
 
       function ToStrings: TStrings;
 
-      property First: PCombination read FFirst;
-      property Last: PCombination read FLast;
+      property Capacity: integer read FCapacity write SetCapacity;
       property Count: integer read FCount;
-      property Items[Index: integer]: PCombination read GetItems;
+      property Items[Index: integer]: TCombination read GetItems write SetItems;
     end;
 
-    TCompactCombo = int64;  TODO: use this instead of the record above - it will use 6 bits per place for a max of 10 places out of 1-63 numbers
-                                                                       - could also use some bits to store the number of places (3-4 bits) and the max (6 bits)
 
 
-
-procedure CalculateCombinations(Places, MaxValue: cardinal; ResultList: TCombinationList);  // minvalue = 1
+procedure CalculateCombinations(NumPlaces, MaxValue: cardinal; ResultList: TCombinationList);  // minvalue = 1
 
 
 
@@ -58,25 +69,71 @@ implementation
 uses
     SysUtils, fvm.Strings;
 
+function FactorialIterative(aNumber: integer): int64;
+var
+  i: Integer;
+begin
+  Result := 1;
+  for i := 1 to aNumber do
+    Result := i * Result;
+end;
+
+function CombinationToString(Source: TCombination): string;
+var   i: integer;
+      r: TCombinationRec;
+begin
+  r.Blob := Source;
+
+  Result := '';
+  for i := 0 to r.NumPlaces-1 do
+    Result := Result + IntToStr(r.Data[i]) + ' ';
+end;
+
+function StringToCombination(const Line: string): TCombination;
+var   s: string;
+      r: TCombinationRec;
+begin
+  r.Blob := 0;
+
+  s := Trim(Line);
+  r.NumPlaces := 0;
+  while (s <> '') and (r.NumPlaces < MaxPlacesConst) do
+  begin
+    r.Data[r.NumPlaces] := StrToIntDef(RetrieveNextValueFrom(s, ' '), 0);
+    if r.Data[r.NumPlaces] = 0 then
+      Break;
+    inc(r.NumPlaces);
+  end;
+
+  Result := r.Blob;
+end;
+
+function CalculateNumberOfCombinations(NumPlaces, MaxValue: cardinal): cardinal;
+begin
+  Result := FactorialIterative(MaxValue) div (FactorialIterative(NumPlaces)*FactorialIterative(MaxValue-NumPlaces));
+end;
+
 {$IFDEF DEBUG}
 var
    OneConst : cardinal = 1;
    TwoConst : cardinal = 2;
 {$ENDIF}
 
-function NextCombination(var Combination: PCombination; SetSize: integer): boolean;
-var
-   i: integer;
+function NextCombination(var Combination: TCombination; NumPlaces, MaxValue: cardinal): boolean;
+var   i: integer;
+      r: TCombinationRec;
 begin
-  i := Combination^.Places-1;
-  inc(Combination^.Data[i]);
-  while (i > 0) and (Combination^.Data[i] >= SetSize-Combination^.Places+1+i) do
+  r.Blob := Combination;
+
+  i := NumPlaces-1;
+  inc(r.Data[i]);
+  while (i > 0) and (r.Data[i] >= MaxValue-NumPlaces+1+i) do
   begin
     dec(i);
-    inc(Combination^.Data[i]);
+    inc(r.Data[i]);
   end;
 
-  if Combination^.Data[0] > SetSize-Combination^.Places then   // combination (n-k, n-k+1, ..., n) reached
+  if r.Data[0] > MaxValue-NumPlaces then   // combination (n-k, n-k+1, ..., n) reached
   begin
     // No more combinations can be generated
     Result := FALSE;
@@ -85,68 +142,60 @@ begin
 
   // Combination^ now looks like (..., x, n, n, n, ..., n).
   // turn it into (..., x, x + 1, x + 2, ...)
-  for i := i+1 to Combination^.Places-1 do
-    Combination^.Data[i] := Combination^.Data[i-1]+1;
+  for i := i+1 to NumPlaces-1 do
+    r.Data[i] := r.Data[i-1]+1;
+
+  r.MaxValue := MaxValue;
+  r.NumPlaces := NumPlaces;
+  Combination := r.Blob;
 
   Result := TRUE;
 end;
 
-procedure CalculateCombinations(Places, MaxValue: cardinal; ResultList: TCombinationList);
-var
-   combo         : PCombination;
-   i, j, setsize : cardinal;
+procedure CalculateCombinations(NumPlaces, MaxValue: cardinal; ResultList: TCombinationList);
+var   r     : TCombinationRec;
+      i, j  : cardinal;
+      combo : TCombination;
+
+  function ComboPlusOne(const Source: TCombination): TCombination;
+  var   counter : cardinal;
+        r2      : TCombinationRec;
+  begin
+    r2.Blob := Source;
+    for counter := 0 to r2.NumPlaces-1 do
+      inc(r2.Data[counter]);
+    Result := r2.Blob;
+  end;
+
 begin
   ResultList.Clear;
   {$IFDEF DEBUG}
-  if Places < OneConst then
-    Exit;
-  if Places < TwoConst then
-    Exit;
+  if NumPlaces < OneConst then  Exit;
+  if NumPlaces < TwoConst then  Exit;
   {$ENDIF}
 
   // initial combination
-  combo := TCombinationList.CreateNewItem(Places);
-  for i := 0 to Places-1 do
-    combo^.Data[i] := i;
-  ResultList.Add(combo);
+  r.MaxValue := MaxValue;
+  r.NumPlaces := NumPlaces;
+  for i := 0 to NumPlaces-1 do
+    r.Data[i] := i;
+  combo := r.Blob;
+  ResultList.Add(ComboPlusOne(combo));
 
   // all other combinations
-  setsize := MaxValue;
-  combo := TCombinationList.CreateNewItem(Places, combo);
-  while NextCombination(combo, setsize) do
-  begin
-    ResultList.Add(combo);
-    combo := TCombinationList.CreateNewItem(Places, combo);
-  end;
-
-  // free last combination we allocated, as it's not used
-  FreeMem(combo);
-
-  // make sure the value range is correct
-  for i := 0 to ResultList.Count-1 do
-  begin
-    combo := ResultList.Items[i];
-    for j := 0 to Places-1 do
-      combo^.Data[j] := combo^.Data[j]+1;
-  end;
+  while NextCombination(combo, NumPlaces, MaxValue) do
+    ResultList.Add(ComboPlusOne(combo));
 end;
 
 { TCombinationList }
 
-procedure TCombinationList.Add(Item: PCombination);
+procedure TCombinationList.Add(Item: TCombination);
 begin
   Lock.Enter;
   try
-    if Assigned(FLast) then
-      FLast^.Next := Item;
-
-    Item^.Prev := FLast;
-    Item^.Next := nil;
-
-    if not Assigned(FFirst) then
-      FFirst := Item;
-    FLast := Item;
-
+    if FCount = FCapacity then
+      SetCapacity(FCapacity+128);
+    FItems^[FCount] := Item;
     inc(FCount);
   finally
     Lock.Leave;
@@ -154,22 +203,10 @@ begin
 end;
 
 procedure TCombinationList.Clear;
-var
-   prev, next: PCombination;
 begin
   Lock.Enter;
   try
-    next := FFirst;
-    FFirst := nil;
-    FLast := nil;
     FCount := 0;
-
-    while Assigned(next) do
-    begin
-      prev := next;
-      next := next^.Next;
-      FreeMem(prev);
-    end;
   finally
     Lock.Leave;
   end;
@@ -179,127 +216,52 @@ constructor TCombinationList.Create;
 begin
   inherited;
 
-  FFirst := nil;
-  FLast := nil;
+  FItems := nil;
   FCount := 0;
+  FCapacity := 0;
 
   Lock := TCriticalSection.Create;
 end;
 
-function TCombinationList.CreateItemFromString(const Line: string): PCombination;
-var
-   s      : string;
-   value  : cardinal;
-   values : array of cardinal;
-   combo  : PCombination;
-   i      : integer;
-begin
-  Result := nil;
-
-  SetLength(values, 0);
-
-  s := Trim(Line);
-  while s <> '' do
-  begin
-    value := StrToIntDef(RetrieveNextValueFrom(s, ' '), 0);
-    if value = 0 then
-      Break;
-
-    SetLength(values, Length(values)+1);
-    values[High(values)] := value;
-  end;
-
-  if Length(values) = 0 then
-    Exit;
-
-  combo := CreateNewItem(Length(values), 0);
-  for i := 0 to combo^.Places-1 do
-    combo^.Data[i] := values[i];
-
-  SetLength(values, 0);
-
-  Result := combo;
-end;
-
-class function TCombinationList.CreateNewItem(Places: cardinal; CopyFrom: PCombination = nil): PCombination;
-var
-   i, cnt  : integer;
-   newsize : int64;
-   item    : PCombination;
-begin
-  newsize := SizeOf(TCombination) + (Places-1) * SizeOf(cardinal);
-  GetMem(item, newsize);
-
-  FillChar(item^, newsize, 0);
-  item^.Places := Places;
-
-  if Assigned(CopyFrom) then
-  begin
-    cnt := Places;
-    if cnt > CopyFrom^.Places then
-      cnt := CopyFrom^.Places;
-    for i := 0 to cnt-1 do
-      item^.Data[i] := CopyFrom^.Data[i];
-  end;
-
-  Result := item;
-end;
-
-procedure TCombinationList.Delete(Item: PCombination; FreeAsWell: boolean);
+procedure TCombinationList.Delete(Index: integer);
+var   i: integer;
 begin
   Lock.Enter;
   try
-    if Assigned(Item^.Prev) then  Item^.Prev^.Next := Item^.Next;
-    if Assigned(Item^.Next) then  Item^.Next^.Prev := Item^.Prev;
-    if Item = FFirst then         FFirst := Item^.Next;
-    if Item = FLast then          FLast := Item^.Prev;
-
+    if Index <= FCount-2 then for i := Index+1 to FCount-1 do
+      FItems^[i-1] := FItems^[i];
     dec(FCount);
   finally
     Lock.Leave;
   end;
-
-  if FreeAsWell then
-    FreeMem(Item);
 end;
 
 destructor TCombinationList.Destroy;
 begin
-  Clear;
+  FreeMem(FItems);
+  FItems := nil;
   FreeAndNil(Lock);
 
   inherited;
 end;
 
-function TCombinationList.GetItems(Index: integer): PCombination;
-var
-   combo : PCombination;
-   idx   : integer;
+function TCombinationList.GetItems(Index: integer): TCombination;
 begin
-  Result := nil;
+  Result := 0;
 
   Lock.Enter;
   try
-    idx := 0;
-    combo := FFirst;
-    while Assigned(combo) do
-    begin
-      if idx = Index then
-        Exit(combo);
-
-      combo := combo^.Next;
-      inc(idx);
-    end;
+    if (Index >= 0) or (Index < FCount) then
+      Result := FItems[Index];
   finally
     Lock.Leave;
   end;
 end;
 
 procedure TCombinationList.LoadFromFile(const FileName: string);
-var
-   sl    : TStringList;
-   line  : string;
-   combo : PCombination;
+var   sl    : TStringList;
+      line  : string;
+      combo : TCombination;
 begin
   sl := TStringList.Create;
   try
@@ -308,10 +270,12 @@ begin
     Lock.Enter;
     try
       Clear;
+      SetCapacity(sl.Count);
+
       for line in sl do
       begin
-        combo := CreateItemFromString(line);
-        if Assigned(combo) then
+        combo := StrToInt64Def(line, 0);
+        if combo <> 0 then
           Add(combo);
       end;
     finally
@@ -322,46 +286,71 @@ begin
   end;
 end;
 
-procedure TCombinationList.SaveToFile(const FileName: string);
-var
-   sl    : TStringList;
-   line  : string;
-   combo : PCombination;
+procedure TCombinationList.Remove(Item: TCombination);
+var   i: integer;
 begin
-  sl := TStringList.Create;
+  Lock.Enter;
   try
-    Lock.Enter;
-    try
-      combo := First;
-      while Assigned(combo) do
-      begin
-        line := combo^.ToString;
-        sl.Add(line);
-      end;
-    finally
-      Lock.Leave;
+    for i := 0 to FCount-1 do if FItems[i] = Item then
+    begin
+      Delete(i);
+      Break;
     end;
+  finally
+    Lock.Leave;
+  end;
+end;
 
+procedure TCombinationList.SaveToFile(const FileName: string);
+var   sl: TStrings;
+begin
+  sl := ToRawStrings;
+  try
     sl.SaveToFile(FileName);
   finally
     sl.Free;
   end;
 end;
 
-function TCombinationList.ToStrings: TStrings;
-var
-   combo: PCombination;
+procedure TCombinationList.SetCapacity(NewValue: integer);
+begin
+  FCapacity := NewValue;
+  if FCapacity < 0 then
+    FCapacity := 0;
+
+  ReallocMem(FItems, FCapacity * SizeOf(TCombination));
+  if FCount > FCapacity then
+    FCount := FCapacity;
+end;
+
+procedure TCombinationList.SetItems(Index: integer; NewValue: TCombination);
+begin
+  FItems[Index] := NewValue;
+end;
+
+function TCombinationList.ToRawStrings: TStrings;
+var   i: integer;
 begin
   Result := TStringList.Create;
 
   Lock.Enter;
   try
-    combo := First;
-    while Assigned(combo) do
-    begin
-      Result.Add(combo^.ToString);
-      combo := combo^.Next;
-    end;
+    for i := 0 to FCount-1 do
+      Result.Add(Format('%d', [FItems^[i]]));
+  finally
+    Lock.Leave;
+  end;
+end;
+
+function TCombinationList.ToStrings: TStrings;
+var   i: integer;
+begin
+  Result := TStringList.Create;
+
+  Lock.Enter;
+  try
+    for i := 0 to FCount-1 do
+      Result.Add(CombinationToString(FItems^[i]));
   finally
     Lock.Leave;
   end;
@@ -369,6 +358,7 @@ end;
 
 { TCombination }
 
+(*
 function TCombination.ContainsOtherCombination(Other: PCombination): boolean;
 var
    i, j  : integer;
@@ -397,5 +387,6 @@ begin
   for i := 0 to Places-1 do
     Result := Result + IntToStr(Data[i]) + ' ';
 end;
+*)
 
 end.

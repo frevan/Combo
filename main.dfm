@@ -29,6 +29,10 @@ object MainForm: TMainForm
     TabOrder = 0
     object ComboSheet: TTabSheet
       Caption = 'Combos'
+      ExplicitLeft = 0
+      ExplicitTop = 0
+      ExplicitWidth = 0
+      ExplicitHeight = 0
       DesignSize = (
         676
         527)
@@ -96,6 +100,10 @@ object MainForm: TMainForm
     object ResultsSheet: TTabSheet
       Caption = 'Past results'
       ImageIndex = 1
+      ExplicitLeft = 0
+      ExplicitTop = 0
+      ExplicitWidth = 0
+      ExplicitHeight = 0
       DesignSize = (
         676
         527)
@@ -147,6 +155,10 @@ object MainForm: TMainForm
     object CalculationsSheet: TTabSheet
       Caption = 'Calculations'
       ImageIndex = 2
+      ExplicitLeft = 0
+      ExplicitTop = 0
+      ExplicitWidth = 0
+      ExplicitHeight = 0
       DesignSize = (
         676
         527)

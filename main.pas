@@ -48,7 +48,7 @@ type
     procedure LoadSelectedCombo;
     function AddNewCombinationFile(const Filename: string): integer;
     procedure LoadPastResults;
-    function ParseCSVLine(const Line: string; out Date: TDate; out Combo: PCombination): boolean;
+    function ParseCSVLine(const Line: string; out Date: TDate; out Combo: TCombination): boolean;
     procedure UpdateCalculationCombos;
     function BuildFileNameForCombination(const ComboName: string): string;
   public
@@ -123,7 +123,7 @@ begin
     sourcelist.LoadFromFile(sourcefname);
     includelist.LoadFromFile(includefname);
 
-    FindCombinationsIncludingAllOfLesser(resultlist, sourcelist, includelist);
+    //FindCombinationsIncludingAllOfLesser(resultlist, sourcelist, includelist);
 
     sl := resultlist.ToStrings;
     CalculationResultBox.Items.Assign(sl);
@@ -242,14 +242,13 @@ begin
 end;
 
 procedure TMainForm.LoadPastResults;
-var
-   fname   : string;
-   sl      : TStringList;
-   csvline : string;
-   d       : TDate;
-   combo   : PCombination;
-   item    : TListItem;
-   i       : integer;
+var   fname, csvline : string;
+      sl             : TStringList;
+      d              : TDate;
+      combo          : TCombination;
+      r              : TCombinationRec;
+      item           : TListItem;
+      i              : integer;
 begin
   PastResultsView.Items.Clear;
 
@@ -265,12 +264,12 @@ begin
       if not ParseCSVLine(csvline, d, combo) then
         Continue;
 
+      r.Blob := combo;
+
       item := PastResultsView.Items.Add;
       item.Caption := DateToStr(d);
-      for i := 0 to combo^.Places-1 do
-        item.SubItems.Add(IntToStr(combo^.Data[i]));
-
-      FreeMem(combo);
+      for i := 0 to r.NumPlaces-1 do
+        item.SubItems.Add(IntToStr(r.Data[i]));
     end;
   finally
     sl.Free;
@@ -280,11 +279,9 @@ begin
 end;
 
 procedure TMainForm.LoadSelectedCombo;
-var
-   fname : string;
-   list  : TCombinationList;
-   combo : PCombination;
-   sl    : TStrings;
+var   fname : string;
+      list  : TCombinationList;
+      sl    : TStrings;
 begin
   if (ComboBox.ItemIndex < 0) or (ComboBox.ItemIndex >= ComboBox.Items.Count) then
     Exit;
@@ -300,6 +297,7 @@ begin
   lblComboCount.Visible := TRUE;
   Application.ProcessMessages;
 
+  //ComboMemo.Lines.LoadFromFile(fname);
   list := TCombinationList.Create;
   try
     list.LoadFromFile(fname);
@@ -314,15 +312,13 @@ begin
   ChangeEnabled;
 end;
 
-function TMainForm.ParseCSVLine(const Line: string; out Date: TDate; out Combo: PCombination): boolean;
-var
-   s, vstring : string;
-   value      : cardinal;
-   values     : array of cardinal;
-   i          : integer;
+function TMainForm.ParseCSVLine(const Line: string; out Date: TDate; out Combo: TCombination): boolean;
+var   s, vstring : string;
+      idx        : integer;
+      r          : TCombinationRec;
 begin
   Date := 0;
-  Combo := nil;
+  r.Blob := 0;
 
   s := Trim(Line);
   vstring := RetrieveNextValueFrom(s, ',');
@@ -336,52 +332,24 @@ begin
       Exit(FALSE);
   end;
 
-  SetLength(values, 0);
-  while s <> '' do
+  r.NumPlaces := 0;
+  while (s <> '') and (r.NumPlaces < fvm.Combinations.MaxPlacesConst) do
   begin
-    value := StrToIntDef(RetrieveNextValueFrom(s, ','), 0);
-    if value = 0 then
+    r.Data[r.NumPlaces] := StrToIntDef(RetrieveNextValueFrom(s, ','), 0);
+    if r.Data[r.NumPlaces] = 0 then
       Break;
-
-    SetLength(values, Length(values)+1);
-    values[High(values)] := value;
+    inc(r.NumPlaces);
   end;
 
-  if Length(values) > 0 then
-  begin
-    Combo := TCombinationList.CreateNewItem(Length(values));
-    for i := 0 to Combo.Places-1 do
-      Combo^.Data[i] := value;
-  end;
-
-  Result := Assigned(Combo);
+  Result := (r.NumPlaces > 0);
 end;
 
 procedure TMainForm.PMComboThreadFinished(var M: TMessage);
-var
-   i, j  : integer;
-   s     : string;
-   combo : PCombination;
-   sl    : TStringList;
-   fname : string;
-   idx   : integer;
+var   fname : string;
+      idx   : integer;
 begin
   fname := GetFilenameForCombination(ComboThread.Num, ComboThread.Max);
-
-  sl := TStringList.Create;
-  try
-    for i := 0 to ComboThread.List.Count-1 do
-    begin
-      combo := ComboThread.List.Items[i];
-      s := '';
-      for j := 0 to ComboThread.Num-1 do
-        s := s + ' ' + IntToStr(combo^.Data[j]);
-      sl.Add(s);
-    end;
-    sl.SaveToFile(fname);
-  finally
-    sl.Free;
-  end;
+  ComboThread.List.SaveToFile(fname);
 
   idx := AddNewCombinationFile(fname);
   if idx >= 0 then

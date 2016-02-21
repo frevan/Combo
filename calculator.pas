@@ -5,7 +5,7 @@ interface
 uses
     Classes, SyncObjs, fvm.Combinations, Generics.Collections;
 
-procedure FindCombinationsIncludingAllOfLesser(ResultList, SourceList, LesserList: TCombinationList);
+//procedure FindCombinationsIncludingAllOfLesser(ResultList, SourceList, LesserList: TCombinationList);
 
 (*
 type
@@ -36,7 +36,8 @@ implementation
 uses
     SysUtils;
 
-procedure FindAllCombinationsFrom(Combo: PCombination; Places: cardinal; ResultList: TCombinationList);
+    (*
+procedure FindAllCombinationsFrom(Combo: TCombination; Places: cardinal; ResultList: TCombinationList);
 var
    current, next : PCombination;
    newlist       : TCombinationList;
