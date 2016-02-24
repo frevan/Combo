@@ -31,15 +31,18 @@ type
 
     TCombinationList = class
     private
-      FItems    : PCombinationListData;
       FCount    : integer;
       FCapacity : integer;
       Lock      : TCriticalSection;
       function GetItems(Index: integer): TCombination;
       procedure SetItems(Index: integer; NewValue: TCombination);
       procedure SetCapacity(NewValue: integer);
+      function GetNumPlaces: cardinal;
+      function GetMaxValue: cardinal;
       function ToRawStrings: TStrings;
     public
+      FItems    : PCombinationListData;
+
       constructor Create;
       destructor Destroy; override;
 
@@ -47,6 +50,8 @@ type
       procedure Delete(Index: integer);
       procedure Remove(Item: TCombination);
       procedure Clear;
+
+      procedure Assign(Source: TCombinationList);
 
       procedure SaveToFile(const FileName: string);
       procedure LoadFromFile(const FileName: string);
@@ -56,6 +61,8 @@ type
       property Capacity: integer read FCapacity write SetCapacity;
       property Count: integer read FCount;
       property Items[Index: integer]: TCombination read GetItems write SetItems;
+      property NumPlaces: cardinal read GetNumPlaces;
+      property MaxValue: cardinal read GetMaxValue;
     end;
 
 
@@ -67,7 +74,16 @@ procedure CalculateCombinations(NumPlaces, MaxValue: cardinal; ResultList: TComb
 implementation
 
 uses
-    SysUtils, fvm.Strings;
+    SysUtils, fvm.Strings, Windows;
+
+const FlagMaskConst      = $80;
+      FlagShiftConst     = 7;
+      MaxValueMaskConst  = $7F;
+      MaxValueShiftConst = 0;
+
+      FileHeaderConst  = $80907050;
+      FileVersionConst = 1;
+
 
 function FactorialIterative(aNumber: integer): int64;
 var
@@ -175,6 +191,7 @@ begin
   {$ENDIF}
 
   // initial combination
+  r.Blob := 0;
   r.MaxValue := MaxValue;
   r.NumPlaces := NumPlaces;
   for i := 0 to NumPlaces-1 do
@@ -197,6 +214,18 @@ begin
       SetCapacity(FCapacity+128);
     FItems^[FCount] := Item;
     inc(FCount);
+  finally
+    Lock.Leave;
+  end;
+end;
+
+procedure TCombinationList.Assign(Source: TCombinationList);
+begin
+  Lock.Enter;
+  try
+    SetCapacity(Source.Capacity);
+    FCount := Source.FCount;
+    CopyMemory(FItems, Source.FItems, SizeOf(TCombination) * FCount);
   finally
     Lock.Leave;
   end;
@@ -258,31 +287,52 @@ begin
   end;
 end;
 
-procedure TCombinationList.LoadFromFile(const FileName: string);
-var   sl    : TStringList;
-      line  : string;
-      combo : TCombination;
+function TCombinationList.GetMaxValue: cardinal;
 begin
-  sl := TStringList.Create;
+  Result := 0;
+  if FCount > 0 then
+    Result := TCombinationRec(FItems^[0]).MaxValue;
+end;
+
+function TCombinationList.GetNumPlaces: cardinal;
+begin
+  Result := 0;
+  if FCount > 0 then
+    Result := TCombinationRec(FItems^[0]).NumPlaces;
+end;
+
+procedure TCombinationList.LoadFromFile(const FileName: string);
+var   m                    : TMemoryStream;
+      header, version, cnt : longword;
+begin
+  Clear;
+  SetCapacity(0);
+
+  m := TMemoryStream.Create;
   try
-    sl.LoadFromFile(FileName);
+    m.LoadFromFile(FileName);
+    m.Position := 0;
+
+    m.Read(header, 4);
+    if header <> FileHeaderConst then
+      Exit;
+
+    m.Read(version, 4);
+    if version > FileVersionConst then
+      Exit;
+
+    m.Read(cnt, 4);
 
     Lock.Enter;
     try
-      Clear;
-      SetCapacity(sl.Count);
-
-      for line in sl do
-      begin
-        combo := StrToInt64Def(line, 0);
-        if combo <> 0 then
-          Add(combo);
-      end;
+      SetCapacity(cnt);
+      m.Read(FItems^, SizeOf(TCombination) * cnt);
+      FCount := cnt;
     finally
       Lock.Leave;
     end;
   finally
-    sl.Free;
+    m.Free;
   end;
 end;
 
@@ -302,13 +352,30 @@ begin
 end;
 
 procedure TCombinationList.SaveToFile(const FileName: string);
-var   sl: TStrings;
+var   m : TMemoryStream;
+      n : longword;
 begin
-  sl := ToRawStrings;
+  m := TMemoryStream.Create;
   try
-    sl.SaveToFile(FileName);
+    n := FileHeaderConst;
+    m.Write(n, 4);
+
+    n := FileVersionConst;
+    m.Write(n, 4);
+
+    Lock.Enter;
+    try
+      n := FCount;
+      m.Write(n, 4);
+
+      m.Write(FItems^, SizeOf(TCombination) * FCount);
+    finally
+      Lock.Leave;
+    end;
+
+    m.SaveToFile(FileName);
   finally
-    sl.Free;
+    m.Free;
   end;
 end;
 

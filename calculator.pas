@@ -5,180 +5,324 @@ interface
 uses
     Classes, SyncObjs, fvm.Combinations, Generics.Collections;
 
-//procedure FindCombinationsIncludingAllOfLesser(ResultList, SourceList, LesserList: TCombinationList);
+procedure FindCombinationsIncludingAllOf(ResultList, SourceList, IncludeList: TCombinationList);
+procedure FindRandomCombinations(ResultList, SourceList: TCombinationList; Count: integer);
 
-(*
-type
-    TCalculatorThread = class(TThread)
-    private
-      SourceList, LesserList: TCombinationList;
-    public
-      Event         : TEvent;
-      FinishedEvent : TEvent;
-      Combo         : PCombination;
-      IsUnique      : boolean;
-      LesserCombos  : TList<PCombination>;
-
-      constructor Create(SetSourceList, SetLesserList: TCombinationList);
-      destructor Destroy; override;
-
-      procedure Execute; override;
-
-      procedure StartNewJob(SetCombo: PCombination);
-      procedure PrepareToDestroy;
-    end;
-*)
+function CalculateHighestSubCountOf(Combo1, Combo2: TCombination; MaxPlaces: cardinal = MaxInt): integer;
 
 
 
 implementation
 
 uses
-    SysUtils;
+    SysUtils, Generics.Defaults;
 
-    (*
-procedure FindAllCombinationsFrom(Combo: TCombination; Places: cardinal; ResultList: TCombinationList);
+type
+    TComboCombo = record
+      Used : boolean;
+      Main : TCombinationRec;
+      Subs : array[0..19] of TCombinationRec;
+    end;
+
+    TComboComboArray = array[0..0] of TComboCombo;
+    PComboComboArray = ^TComboComboArray;
+
+type
+    TCalculatorThread = class(TThread)
+    public
+      Subs  : TArray<TCombination>;
+      Combo : TCombination;
+      Found : boolean;
+      procedure Execute; override;
+    end;
+
+    TCalculator = class
+    private
+      Threads        : TList<TCalculatorThread>;
+      Src            : PComboComboArray;
+      SrcLength      : cardinal;
+      SrcIndex       : cardinal;
+      Subs           : TArray<TCombination>;
+      SubsIndex      : cardinal;
+      SubsRequired   : cardinal;
+      SubsInSrcCount : cardinal;
+      procedure CreateSrcArray(SourceList: TCombinationList; SubNumPlaces: cardinal);
+      procedure CreateSubArray(SubList: TCombinationList);
+      function FindUnique(UniqueSubsRequired: integer): TCombination;
+    public
+      Results: TCombinationList;
+
+      constructor Create;
+      destructor Destroy; override;
+
+      procedure Calculate(SourceList, SubsList: TCombinationList);
+    end;
+
+
+
+procedure FindCombinationsIncludingAllOf(ResultList, SourceList, IncludeList: TCombinationList);
 var
-   current, next : PCombination;
-   newlist       : TCombinationList;
-   i             : integer;
+   calc : TCalculator;
+begin
+  calc := TCalculator.Create;
+  try
+    calc.Calculate(SourceList, IncludeList);
+    ResultList.Assign(calc.Results);
+  finally
+    calc.Free;
+  end;
+end;
+
+procedure FindRandomCombinations(ResultList, SourceList: TCombinationList; Count: integer);
+var   src    : TCombinationList;
+      i, idx : integer;
+      combo  : TCombination;
 begin
   ResultList.Clear;
 
-  newlist := TCombinationList.Create;
+  src := TCombinationList.Create;
   try
-    CalculateCombinations(Places, Combo^.Places, newlist);
-
-    current := newlist.First;
-    while Assigned(current) do
+    src.Assign(SourceList);
+    for i := 0 to Count-1 do
     begin
-      next := current^.Next;
-      for i := 0 to current^.Places-1 do
-        current^.Data[i] := Combo^.Data[current^.Data[i]];
-      ResultList.Add(current);
-      current := next;
+      idx := Random(src.Count);
+      combo := src.Items[idx];
+      src.Delete(idx);
+      ResultList.Add(combo);
     end;
   finally
-    newlist.Free;
+    src.Free;
   end;
 end;
 
-function FindUniqueCombination(SourceList: TCombinationList; StartIndex: integer; ResultList, LesserList: TCombinationList; RemoveFromSource, RemoveFromLesser: boolean): PCombination;
-var
-   combo, lesser       : PCombination;
-   idx, lessercount, i : integer;
-   usedcombos          : array of PCombination;
-begin
-  Result := nil;
-  if (StartIndex < 0) or (StartIndex >= SourceList.Count) then
-    Exit;
+function CalculateHighestSubCountOf(Combo1, Combo2: TCombination; MaxPlaces: cardinal): integer;
+var   r1, r2 : TCombinationRec;
+      l1, l2 : TCombinationList;
+      places : cardinal;
+      i, j   : integer;
+      found  : boolean;
+      maxplc : cardinal;
 
-  SetLength(usedcombos, 100);
-
-  idx := StartIndex;
-  while TRUE do
+  procedure CombosNow(List: TCombinationList; const Combination: TCombinationRec);
+  var   counter, counter2 : integer;
+        rn      : TCombinationRec;
   begin
-    combo := SourceList.Items[idx];
-    inc(idx);
-    if idx >= SourceList.Count then
-      idx := 0;
-    if idx = StartIndex then
-      Break;
-
-    lessercount := 0;
-    lesser := LesserList.First;
-    while Assigned(lesser) do
+    List.Clear;
+    CalculateCombinations(places, r1.NumPlaces, List);
+    for counter := 0 to List.Count-1 do
     begin
-      if combo^.ContainsOtherCombination(lesser) then
+      rn.Blob := List.Items[counter];
+      for counter2 := 0 to places-1 do
+        rn.Data[counter2] := Combination.Data[rn.Data[counter2]-1];
+      List.Items[counter] := rn.Blob;
+    end;
+  end;
+
+begin
+  Result := 0;
+
+  l1 := TCombinationList.Create;
+  l2 := TCombinationList.Create;
+
+  r1.Blob := Combo1;
+  r2.Blob := Combo2;
+
+  maxplc := r1.NumPlaces;
+  if MaxPlaces < maxplc then
+    maxplc := MaxPlaces;
+
+  for places := maxplc downto 1 do
+  begin
+    CombosNow(l1, r1);
+    CombosNow(l2, r2);
+
+    found := FALSE;
+    for i := 0 to l1.Count-1 do for j := 0 to l2.Count-1 do
+    begin
+      if l1.Items[i] = l2.Items[j] then
       begin
-        usedcombos[lessercount] := lesser;
-        inc(lessercount);
+        Result := places;
+        found := TRUE;
+        Break;
       end;
-      lesser := lesser^.Next;
     end;
-    if lessercount = 20 then
-    begin
-      Result := combo;
+    if found then
       Break;
-    end;
   end;
 
-  if Assigned(Result) then
-  begin
-    if RemoveFromSource then
-      SourceList.Delete(Result, FALSE);
-    if RemoveFromLesser then for i := 0 to lessercount-1 do
-      LesserList.Delete(usedcombos[i], TRUE);
-  end;
-end;
-
-procedure FindCombinationsIncludingAllOfLesser(ResultList, SourceList, LesserList: TCombinationList);
-{const
-     threadcount = 8;}
-var
-   curidx              : integer;
-   combo, lesser, next : PCombination;
-   done                : boolean;
-   //threads             : array[0..threadcount-1] of TCalculatorThread;
-   i                   : integer;
-begin
-  if not Assigned(ResultList) or not Assigned(SourceList) or not Assigned(LesserList) then
-    Exit;
-  if (SourceList.Count = 0) or (LesserList.Count = 0) then
-    Exit;
-
-  ResultList.Clear;
-
-  curidx := SourceList.Count div 2;
-  while (SourceList.Count > 0) and (LesserList.Count > 0) do
-  begin
-    curidx := SourceList.Count div 2;
-    combo := FindUniqueCombination(SourceList, curidx, ResultList, LesserList, TRUE, TRUE);
-    if not Assigned(combo) then
-      Break;
-
-    ResultList.Add(combo);
-  end;
+  l1.Free;
+  l2.Free;
 end;
 
 { TCalculatorThread }
 
-(*
-constructor TCalculatorThread.Create;
+procedure TCalculatorThread.Execute;
 begin
-  inherited Create(FALSE);
-
-  Event := TEvent.Create(nil, TRUE, TRUE, '');
-  FinishedEvent := TEvent.Create(nil, TRUE, TRUE, '');
+  {}
 end;
 
-destructor TCalculatorThread.Destroy;
+{ TCalculator }
+
+procedure TCalculator.Calculate(SourceList, SubsList: TCombinationList);
+var   combo: TCombination;
 begin
-  FreeAndNil(Event);
-  FreeAndNil(FinishedEvent);
+  Results.Clear;
+  if not Assigned(SourceList) or not Assigned(SubsList) then
+    Exit;
+
+  CreateSrcArray(SourceList, SubsList.NumPlaces);
+  if not Assigned(Src) then
+    Exit;
+
+  CreateSubArray(SubsList);
+  if Length(Subs) = 0 then
+  begin
+    FreeMem(Src);
+    Src := nil;
+    Exit;
+  end;
+
+  SrcIndex := 0;
+  SubsIndex := 0;
+  SubsRequired := SubsInSrcCount;
+  repeat
+    combo := FindUnique(SubsRequired);
+    if combo = 0 then
+    begin
+      dec(subsrequired);
+      srcindex := 0;
+    end
+    else
+      Results.Add(combo);
+  until (SubsRequired = 0) or (SubsIndex >= Length(Subs));
+
+  FreeMem(Src);
+  Src := nil;
+  SrcLength := 0;
+  SetLength(Subs, 0);
+end;
+
+constructor TCalculator.Create;
+begin
+  inherited;
+
+  Threads := TList<TCalculatorThread>.Create;
+  Results := TCombinationList.Create;
+end;
+
+procedure TCalculator.CreateSrcArray(SourceList: TCombinationList; SubNumPlaces: cardinal);
+var   i, j, k : integer;
+      clist   : TCombinationList;
+      r       : TCombinationRec;
+begin
+  SubsInSrcCount := 0;
+
+  GetMem(Src, SizeOf(TComboCombo) * SourceList.Count);
+  SrcLength := SourceList.Count;
+
+  clist := TCombinationList.Create;
+  try
+    CalculateCombinations(SubNumPlaces, SourceList.NumPlaces, clist);
+    if clist.Count > 20 then
+    begin
+      FreeMem(Src);
+      Src := nil;
+      SrcLength := 0;
+      Exit;
+    end;
+
+    SubsInSrcCount := clist.Count;
+
+    for i := 0 to SourceList.Count-1 do with Src^[i] do
+    begin
+      Used := FALSE;
+      Main.Blob := SourceList.Items[i];
+      for j := 0 to clist.Count-1 do
+      begin
+        r.Blob := clist.Items[j];
+        Subs[j].MaxValue := SourceList.MaxValue;
+        Subs[j].NumPlaces := SubNumPlaces;
+        for k := 0 to SubNumPlaces-1 do
+          Subs[j].Data[k] := Main.Data[r.Data[k]-1];
+      end;
+    end;
+  finally
+    clist.Free;
+  end;
+end;
+
+procedure TCalculator.CreateSubArray(SubList: TCombinationList);
+var   i: integer;
+begin
+  Subs := TArray<TCombination>.Create();
+  SetLength(Subs, SubList.Count);
+  for i := 0 to Length(Subs)-1 do
+    Subs[i] := 0;
+end;
+
+destructor TCalculator.Destroy;
+begin
+  SetLength(Subs, 0);
+  FreeMem(Src);
+  Results.Free;
+  Threads.Free;
 
   inherited;
 end;
 
-procedure TCalculatorThread.Execute;
+function TCalculator.FindUnique(UniqueSubsRequired: integer): TCombination;
+var   i, j, k, startidx : cardinal;
+      subplaces         : cardinal;
+      sub               : TCombination;
+      remaining         : integer;
+      foundidxs         : array of boolean;
 begin
-  Event.WaitFor(INFINITE);
-  ddd
-end;
+  Result := 0;
 
-procedure TCalculatorThread.PrepareToDestroy;
-begin
-  Terminate;
-  Event.SetEvent;
-  WaitFor;
-end;
+  SetLength(foundidxs, SubsInSrcCount);
 
-procedure TCalculatorThread.StartNewJob(SetCombo: PCombination);
-begin
-  Combo := SetCombo;
-  Event.SetEvent;
-  FinishedEvent.ResetEvent;
+  startidx := SrcIndex;
+  for i := startidx to SrcLength-1 do
+  begin
+    inc(SrcIndex);
+    if Src^[i].Used then
+      Continue;
+
+    remaining := SubsInSrcCount;
+    for j := 0 to SubsInSrcCount-1 do
+    begin
+      sub := Src^[i].Subs[j].Blob;
+      foundidxs[j] := FALSE;
+      for k := 0 to Length(Subs)-1 do
+      begin
+        if Subs[k] = sub then
+        begin
+          foundidxs[j] := TRUE;
+          Break;
+        end
+        else if Subs[k] = 0 then
+          Break;
+      end;
+      if foundidxs[j] then
+      begin
+        dec(remaining);
+        if remaining < UniqueSubsRequired then
+          Break;
+      end;
+    end;
+
+    if remaining >= UniqueSubsRequired then
+    begin
+      for j := 0 to SubsInSrcCount-1 do if not foundidxs[j] then
+      begin
+        Subs[SubsIndex] := Src^[i].Subs[j].Blob;
+        inc(SubsIndex);
+      end;
+      Src^[i].Used := TRUE;
+      Result := Src^[i].Main.Blob;
+      Break;
+    end;
+  end;
 end;
-*)
 
 end.

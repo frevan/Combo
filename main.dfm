@@ -29,10 +29,6 @@ object MainForm: TMainForm
     TabOrder = 0
     object ComboSheet: TTabSheet
       Caption = 'Combos'
-      ExplicitLeft = 0
-      ExplicitTop = 0
-      ExplicitWidth = 0
-      ExplicitHeight = 0
       DesignSize = (
         676
         527)
@@ -96,14 +92,28 @@ object MainForm: TMainForm
         ScrollBars = ssVertical
         TabOrder = 4
       end
+      object ComboLoadListBtn: TButton
+        Left = 517
+        Top = 3
+        Width = 75
+        Height = 25
+        Caption = 'Load list'
+        TabOrder = 5
+        OnClick = ComboLoadListBtnClick
+      end
+      object ComboSaveAsTextBtn: TButton
+        Left = 598
+        Top = 3
+        Width = 75
+        Height = 25
+        Caption = 'Save as text'
+        TabOrder = 6
+        OnClick = ComboSaveAsTextBtnClick
+      end
     end
     object ResultsSheet: TTabSheet
       Caption = 'Past results'
       ImageIndex = 1
-      ExplicitLeft = 0
-      ExplicitTop = 0
-      ExplicitWidth = 0
-      ExplicitHeight = 0
       DesignSize = (
         676
         527)
@@ -155,10 +165,6 @@ object MainForm: TMainForm
     object CalculationsSheet: TTabSheet
       Caption = 'Calculations'
       ImageIndex = 2
-      ExplicitLeft = 0
-      ExplicitTop = 0
-      ExplicitWidth = 0
-      ExplicitHeight = 0
       DesignSize = (
         676
         527)
@@ -170,23 +176,16 @@ object MainForm: TMainForm
         Caption = 'Create combinations of '
       end
       object Label3: TLabel
-        Left = 274
+        Left = 249
         Top = 8
-        Width = 40
+        Width = 46
         Height = 13
-        Caption = 'so all of '
-      end
-      object Label4: TLabel
-        Left = 471
-        Top = 8
-        Width = 62
-        Height = 13
-        Caption = 'are included.'
+        Caption = 'with all of'
       end
       object CalcSourceCombo: TComboBox
         Left = 123
         Top = 5
-        Width = 145
+        Width = 120
         Height = 21
         Style = csDropDownList
         Ctl3D = True
@@ -194,9 +193,9 @@ object MainForm: TMainForm
         TabOrder = 0
       end
       object CalcInclusionCombo: TComboBox
-        Left = 320
+        Left = 301
         Top = 5
-        Width = 145
+        Width = 120
         Height = 21
         Style = csDropDownList
         Ctl3D = True
@@ -204,7 +203,7 @@ object MainForm: TMainForm
         TabOrder = 1
       end
       object CalculateBtn: TButton
-        Left = 552
+        Left = 427
         Top = 3
         Width = 75
         Height = 25
@@ -221,6 +220,60 @@ object MainForm: TMainForm
         ItemHeight = 13
         TabOrder = 3
       end
+      object CalcSaveAsTextBtn: TButton
+        Left = 508
+        Top = 3
+        Width = 75
+        Height = 25
+        Caption = 'Save as text'
+        TabOrder = 4
+        OnClick = CalcSaveAsTextBtnClick
+      end
+      object CalcWinBox: TListBox
+        Left = 231
+        Top = 63
+        Width = 442
+        Height = 461
+        Anchors = [akLeft, akTop, akRight, akBottom]
+        Font.Charset = ANSI_CHARSET
+        Font.Color = clWindowText
+        Font.Height = -15
+        Font.Name = 'Consolas'
+        Font.Style = []
+        ItemHeight = 18
+        ParentFont = False
+        TabOrder = 5
+      end
+      object CalcLoadFromTextBtn: TButton
+        Left = 598
+        Top = 32
+        Width = 75
+        Height = 25
+        Caption = 'Load...'
+        TabOrder = 6
+        OnClick = CalcLoadFromTextBtnClick
+      end
+      object CalcRandomBtn: TButton
+        Left = 427
+        Top = 32
+        Width = 75
+        Height = 25
+        Caption = 'Random Pick'
+        TabOrder = 7
+        OnClick = CalcRandomBtnClick
+      end
     end
+  end
+  object SaveDialog: TSaveDialog
+    DefaultExt = '.txt'
+    Filter = 'Text files (*.txt)|*.txt|All files (*.*)|*.*'
+    FilterIndex = 0
+    Options = [ofOverwritePrompt, ofEnableSizing]
+    Left = 564
+    Top = 104
+  end
+  object OpenDialog: TOpenDialog
+    Left = 476
+    Top = 128
   end
 end
